@@ -105,6 +105,7 @@ sys_pgaccess(void)
       *pte &= ~PTE_A; 
     }
   }
+  sfence_vma();
 
   // Sao chép kết quả ra userspace
   // copyout trả về int (-1 nếu lỗi)

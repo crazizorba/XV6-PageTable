@@ -1,0 +1,16 @@
+1)Những lệnh gọi hệ thống nào khác trong xv6 có thể được tăng tốc bằng cách sử dụng trang chia sẻ này? Hãy giải thích.
+Ngoài getpid(), các system call phù hợp nhất để tăng tốc bằng shared read-only page trong xv6 là:
+getppid(), getuid(), geteuid(), getgid(), getegid(), và (có điều kiện) getcwd().
+Lý do chung: chúng trả về dữ liệu nhỏ, ít thay đổi hoặc thay đổi hiếm trong suốt đời process, nên chi phí update từ kernel là rất thấp, còn lợi ích loại bỏ syscall overhead là rất lớn.
+Các syscall thay đổi liên tục như uptime(), time(), hoặc cần truyền buffer lớn như read/write() thì không phù hợp
+4) Giải thích chi tiết các trang lá trong đầu ra của vmprint():
+Trong đầu ra của vmprint(), các trang lá (leaf PTE) là những mục nằm ở cấp cuối của bảng trang, nơi PTE có chứa các bit quyền truy cập như R, W hoặc X. Các trang này không trỏ đến bảng trang cấp dưới nữa mà ánh xạ trực tiếp tới các khung trang vật lý chứa dữ liệu hoặc mã thực thi của tiến trình init. Dựa vào các bit quyền trong mỗi PTE, ta có thể suy luận được loại nội dung mà từng trang chứa.
+- Cụm trang tại địa chỉ vật lý 0x0000000087f69000 – 0x87f64000: 
+Giá trị PTE kết thúc bằng 0x1f, tương ứng với tập quyền R + X + U + V, không có quyền ghi. Điều này cho thấy trang chứa mã thực thi (.text) của tiến trình init, vì mã chỉ được phép đọc và chạy, không được ghi đè.
+Giá trị PTE kết thúc bằng 0x07, tương ứng với R + W + U + V nhưng không có X. Vì vậy, đây là một trang dữ liệu có thể thay đổi: chứa .data, .bss hoặc stack của tiến trình.
+→ Trong vùng này, init có các trang mã lệnh, xen lẫn với dữ liệu chỉ đọc.
+- Các trang leaf cuối cùng (chỉ số 510 và 511)
+.. .. ..510: pte 0x0000000021fdd007 pa 0x0000000087f74000
+PTE kết thúc bằng 0x07 giống trang dữ liệu trước nhưng xuất hiện xa hơn trong vùng ảo. Điều này cho thấy đây nhiều khả năng là stack người dùng của init, vì stack thường ở cuối không gian địa chỉ user và tách khỏi vùng .data.
+.. .. ..511: pte 0x0000000020001c0b pa 0x0000000080007000
+PA = 0x80007000 → nằm trong vùng kernel text (theo memlayout trong xv6). PTE kết thúc bằng 0x0b (R + X + V, không có W, đôi khi không có U hoặc bị giới hạn quyền truy cập) → chứa mã kernel được ánh xạ chỉ đọc và thực thi để phục vụ quá trình exec() khởi chạy init. 

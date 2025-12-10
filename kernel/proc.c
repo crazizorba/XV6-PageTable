@@ -222,7 +222,7 @@ proc_pagetable(struct proc *p)
               (uint64)(p->usyscall), PTE_R | PTE_U) < 0){ // Chỉ PTE_R | PTE_U
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
-    uvmunmap(pagetable, USYSCALL, 1, 0);
+    //uvmunmap(pagetable, USYSCALL, 1, 0);
     uvmfree(pagetable, 0);
     return 0;
   }
@@ -236,7 +236,7 @@ void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   // Hủy ánh xạ trang USYSCALL
-  uvmunmap(pagetable, USYSCALL, 1, 0);
+  //uvmunmap(pagetable, USYSCALL, 1, 0);
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmunmap(pagetable, USYSCALL, 1, 0);// giải phóng
