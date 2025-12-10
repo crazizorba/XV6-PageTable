@@ -74,7 +74,42 @@ sys_sleep(void)
 int
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
+  uint64 base;            // Địa chỉ ảo bắt đầu
+  int len;                // Số lượng trang
+  uint64 mask_user_addr;  // Địa chỉ buffer của user
+  
+  argaddr(0, &base);
+  argint(1, &len);
+  argaddr(2, &mask_user_addr);
+
+  if(len > 32) 
+    len = 32;
+
+  unsigned int abits = 0; // Bitmask kết quả
+  struct proc *p = myproc();
+
+  // Duyệt qua từng trang
+  for(int i = 0; i < len; i++){
+    uint64 va = base + i * PGSIZE;
+    
+    // Tìm PTE
+    pte_t *pte = walk(p->pagetable, va, 0);
+
+    // Kiểm tra: Tồn tại + Hợp lệ (V) + Đã truy cập (A)
+    if(pte != 0 && (*pte & PTE_V) && (*pte & PTE_A)){
+      
+      // Bật bit thứ i
+      abits = abits | (1 << i);
+
+      // Xóa bit Access để reset trạng thái cho lần sau
+      *pte &= ~PTE_A; 
+    }
+  }
+
+  // Sao chép kết quả ra userspace
+  // copyout trả về int (-1 nếu lỗi)
+  if(copyout(p->pagetable, mask_user_addr, (char *)&abits, sizeof(abits)) < 0)
+    return -1;
   return 0;
 }
 #endif
