@@ -132,14 +132,13 @@ found:
     return 0;
   }
 
-  //Add here
+  // Cấp phát một trang bộ nhớ để lưu struct usyscall (chứa PID)
   if((p->usyscall = (struct usyscall *)kalloc()) == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
-
-  memset(p->usyscall, 0, PGSIZE);
+  // Lưu PID vào trang này để user-space có thể đọc
   p->usyscall->pid = p->pid;
 
   // An empty user page table.
@@ -169,8 +168,9 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
 
-  if(p->usyscall)              
-    kfree((void*)p->usyscall);  // Giải phóng trang usyscall
+  // Giải phóng trang usyscall
+  if(p->usyscall)
+    kfree((void*)p->usyscall);
   p->usyscall = 0;
 
   if(p->pagetable)
@@ -217,14 +217,16 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
-  //map the usyscall page
-  if(mappages(pagetable, USYSCALL, PGSIZE,
-              (uint64)(p->usyscall), PTE_R | PTE_U) < 0){ // Chỉ PTE_R | PTE_U
-    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+  // Ánh xạ trang USYSCALL
+  // Map trang USYSCALL vào địa chỉ p->usyscall
+  // PTE_R: Read-only (user không được sửa PID)
+  // PTE_U: User mode được phép truy cập
+  if(mappages(pagetable, USYSCALL, PGSIZE, 
+              (uint64)(p->usyscall), PTE_R | PTE_U) < 0){
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
-    //uvmunmap(pagetable, USYSCALL, 1, 0);
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmfree(pagetable, 0);
-    return 0;
+    return 0;          
   }
 
   return pagetable;
@@ -236,10 +238,9 @@ void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   // Hủy ánh xạ trang USYSCALL
-  //uvmunmap(pagetable, USYSCALL, 1, 0);
+  uvmunmap(pagetable, USYSCALL, 1, 0);
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  uvmunmap(pagetable, USYSCALL, 1, 0);// giải phóng
   uvmfree(pagetable, sz);
 }
 
@@ -330,23 +331,6 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
-  if((np->usyscall = (struct usyscall *)kalloc()) == 0){
-    freeproc(np);
-    release(&np->lock);
-    return -1;
-  }
-  memset(np->usyscall, 0, PGSIZE);
-  np->usyscall->pid = np->pid;  // Cập nhật PID mới
-
-  // Unmap old mapping từ uvmcopy (nếu có), map new
-  uvmunmap(np->pagetable, USYSCALL, 1, 0);
-  if(mappages(np->pagetable, USYSCALL, PGSIZE, (uint64)np->usyscall, PTE_R | PTE_U) < 0){
-    kfree((void*)np->usyscall);  // THÊM: Giải phóng nếu map fail
-    np->usyscall = 0;
-    freeproc(np);
-    release(&np->lock);
-    return -1;
-  }
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
